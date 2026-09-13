@@ -6,6 +6,9 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 
 ## 功能
 
+- **可切换搜索后端**：设置卡片里选 `backend`，即时生效、无需重启 ——
+  - `local`（默认）：本插件的六档抓取管线；
+  - `official`：复用内置 `@deepseek-ai/dsh-web-search-deepseek` 的 provider（进程内委托），端点/模型/密钥仍由官方「Web search」卡片管理。
 - **六档检索深度（T1 极速 → T6 研究）**：模型可传 `tier` 参数，缺省时按查询特征自动选档。
 - **双池引擎**：P0 搜索引擎池 + P1 社交平台池，按档位取前 N 个。
 - **可选验证与子代理查证**：确定性启发式评级（域名信誉 + 相似度聚类），T4 以上派发 WebSearch 子代理分诊，T5/T6 可用 `curl` 打开页面核查上游来源，输出证据等级。
@@ -15,13 +18,30 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 
 ```
 .
-├── package.json      # 包元信息（name/exports/dsh.client 声明）
+├── package.json      # 包元信息（name/exports/dsh.engines/dsh.client 声明）
+├── LICENSE           # MIT
 └── lib
-    ├── index.js      # 宿主半：provider + web_search 工具 + 设置命名空间
-    └── client.js     # 浏览器半：设置页卡片
+    ├── index.js      # 宿主半：provider(router) + web_search 工具 + 设置命名空间
+    └── client.js     # 浏览器半：设置页卡片（含 backend 选择）
 ```
 
 > 本仓库直接存放可运行的 ESM 源码，无构建步骤：`lib/*.js` 即发布产物。
+
+## 变更记录
+
+### 1.1.0
+
+- **新增 `backend` 设置**：可在「设置 → 插件」卡片里于 `local`（本地六档抓取）与 `official`（内置 DeepSeek 搜索）之间实时切换，无需重启。
+- **修复 DSH 0.1.5-rc.2 兼容性**（1.0.0 在该版本上会直接加载失败）：
+  - 设置 API 迁移到 `ctx.settings.installSection(...)`（`installSettingsSection` / `settingsNamespace` 已从 `dsh-settings` 移除）。
+  - 修正 `setSource` 的 thunk 语义：旧代码把 `() => T` 当值用，导致**设置卡片改了不生效**。
+  - 浏览器半：`@deepseek-ai/dsh-client-runtime` → `@deepseek-ai/dsh-client-store`。
+  - 浏览器半：设置卡片注册改用 keyed slot 要求的 `key`（原 `id` 会**抛错**导致卡片不显示）。
+- 新增 MIT LICENSE；`package.json` 补 `dsh.engines.dsh` 版本要求。
+
+### 1.0.0
+
+- 首个版本：六档分级抓取式检索。
 
 ## 六档深度
 
@@ -45,8 +65,13 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 
 ### 前置条件
 
+- **DSH `>= 0.1.5-rc.2`**（见 `package.json` 的 `dsh.engines.dsh`）。本插件直接引用若干宿主包的内部 API，跨小版本可能断裂：
+  - `ctx.settings.installSection(...)`（`dsh-settings`，0.1.5-rc.2 起；旧的 `installSettingsSection` / `settingsNamespace` 导出已移除）
+  - `createSnapshotStore` 来自 `@deepseek-ai/dsh-client-store`（旧的 `dsh-client-runtime` 已不存在）
+  - 设置卡片注册到 `settings.plugin.item` 这个 **keyed** slot，必须传 `key`（命名空间）而非 `id`
+  - `DeepSeekSearchProvider` / `WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE`（`backend: official` 委托用）
 - DSH 已安装，且使用 `web` profile（`~/.dsh/profiles/web`）。
-- `pnpm-workspace.yaml` 建议包含 `nodeLinker: hoisted`，否则 pnpm 的严格布局可能让包解析失败。
+- `pnpm-workspace.yaml` 建议包含 `nodeLinker: hoisted`：本插件不声明依赖（宿主包由 DSH 提供），严格布局下包解析可能失败。
 - 本仓库为**公开**仓库，git 安装无需任何认证。
 
 ### 方式 A：作为 git 依赖安装（标准方式）
@@ -57,7 +82,10 @@ dsh plugin --profile web add github:BaihaWhite/dsh-web-search-scrape
 
 `dsh plugin` 是 pnpm 的包装命令，等价于在该 profile 下执行 `pnpm add`，会把本包写入 `package.json` 依赖并安装到 `node_modules`。
 
-### 方式 B：本地目录 + 符号链接（本机当前使用的方式）
+### 方式 B：本地目录 + 符号链接
+
+> 注意：克隆目录**必须放在 profile 目录内**（如下），否则 Node 按真实路径解析裸导入时
+> 找不到宿主包。放到 `/tmp` 之类的目录会报 `Cannot find package '@deepseek-ai/dsh-...'`。
 
 ```sh
 cd ~/.dsh/profiles/web
@@ -74,6 +102,7 @@ ln -s ../web-search-scrape node_modules/web-search-scrape
 ```yaml
 # 1) web 行：searchProvider 改指本插件的 provider id
 #    （补丁语义：整段替换目标行 config，故需重述全部字段）
+#    本插件是该 id 的 router：真正走哪条后端由设置卡片的 backend 决定。
 - id: web
   config:
     searchProvider: web-scrape
@@ -86,15 +115,19 @@ ln -s ../web-search-scrape node_modules/web-search-scrape
     searchTimeoutMs: 180000
     searchMaxResults: 130
 
-# 3) 禁用内置 DeepSeek 官方搜索 provider（不再消耗 API 配额）
-- id: web-search-deepseek
-  disabled: true
+# 3) web-search-deepseek：**保持启用**（不要 disabled）
+#    它是 backend=official 的委托目标，也提供官方「Web search」设置卡片
+#    （端点 / 模型 / 密钥）。把它 disabled 后 official 仍可跑（走默认端点 +
+#    凭据），但用户将无法在界面上配置官方端点。
+#    它注册的 deepseek-official provider 不会被选中——第 1 项已把
+#    searchProvider 钉在 web-scrape 上，因此不会产生歧义。
 
 # 4) 挂载本插件
 - insert:
     - id: web-search-scrape
       name: 'web-search-scrape'
       config:
+        backend: local          # local | official（设置卡片里可随时切换）
         engines: [duckduckgo, bing, baidu, google, yandex]
         socials: [weixin, bilibili, weibo, x, zhihu, douyin, reddit]
         verify: true
@@ -117,6 +150,7 @@ dsh --profile web --dump-config | grep -i "cannot find"
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
+| `backend` | `local` \| `official` | `local` | 搜索后端。`local` = 本插件六档抓取；`official` = 委托内置 DeepSeek 搜索。**改动即时生效**（每次搜索重新取快照） |
 | `engines` | string[] | `[duckduckgo, bing, baidu, google, yandex]` | P0 搜索引擎池 |
 | `socials` | string[] | `[weixin, bilibili, weibo, x, zhihu, douyin, reddit]` | P1 社交平台池 |
 | `engineResults` | number | `50` | 单引擎抓取结果上限 |
@@ -157,6 +191,4 @@ rm -rf ~/.dsh/profiles/web/web-search-scrape
 
 ## 许可证
 
-本仓库当前**未声明开源许可证**——未授予第三方使用、修改或分发本代码的权利。
-
-如需开放复用，请在本仓库添加许可证文件（例如 MIT License，与 `dsh-plugins-list` 保持一致）。
+MIT License，见 [LICENSE](LICENSE)。
