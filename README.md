@@ -13,6 +13,9 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 - **双池引擎**：P0 搜索引擎池 + P1 社交平台池，按档位取前 N 个。
 - **可选验证与子代理查证**：确定性启发式评级（域名信誉 + 相似度聚类），T4 以上派发 WebSearch 子代理分诊，T5/T6 可用 `curl` 打开页面核查上游来源，输出证据等级。
 - **设置页卡片**：浏览器半在「设置 → 插件」注册配置卡片，配置经 `dsh-settings` 持久化。
+  **卡片默认收起**（与同页其他插件卡片一致），点标题栏展开；展开状态记在
+  `localStorage`（键 `web-search-scrape.card.open`），收起时会显示一行摘要
+  （当前后端 / 缺省档位 / 是否有未保存修改）。
 
 ## 目录结构
 
@@ -32,6 +35,7 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 ### 1.1.0
 
 - **新增 `backend` 设置**：可在「设置 → 插件」卡片里于 `local`（本地六档抓取）与 `official`（内置 DeepSeek 搜索）之间实时切换，无需重启。
+- **设置卡片改为默认收起**：标题栏可点开/收起，展开状态持久化到 `localStorage`，收起时显示一行摘要。
 - **修复 DSH 0.1.5-rc.2 兼容性**（1.0.0 在该版本上会直接加载失败）：
   - 设置 API 迁移到 `ctx.settings.installSection(...)`（`installSettingsSection` / `settingsNamespace` 已从 `dsh-settings` 移除）。
   - 修正 `setSource` 的 thunk 语义：旧代码把 `() => T` 当值用，导致**设置卡片改了不生效**。
