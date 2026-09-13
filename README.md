@@ -284,6 +284,20 @@ dsh plugin --profile web add \
 > 但那只是便利性差异，**不是分发的前提**。
 
 
+### 发布到 npm（可选，本项目不需要）
+
+本仓库**以 GitHub 分发**，`package.json` 保留了 `"private": true` 以防手滑误发
+（npm 会以 `EPRIVATE` 拒绝）。若哪天真要发 npm：
+
+```sh
+# 1) 去掉 package.json 里的 "private": true
+# 2) 本机默认 registry 是 npmmirror 只读镜像，publishConfig 已锁定官方源
+npm login --registry https://registry.npmjs.org/
+npm publish          # publishConfig 会把包发到 registry.npmjs.org
+```
+
+包名 `web-search-scrape` 目前未被占用（2026-09 核对）。
+
 ### 方式 B：本地目录 + 符号链接（开发调试）
 
 > 注意：克隆目录**必须放在 profile 目录内**（如下），否则 Node 按真实路径解析裸导入时
