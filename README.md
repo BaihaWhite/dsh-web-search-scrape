@@ -235,10 +235,20 @@ rm -rf ~/.dsh/.agent-presets/<id>
 - `pnpm-workspace.yaml` 建议包含 `nodeLinker: hoisted`：本插件不声明依赖（宿主包由 DSH 提供），严格布局下包解析可能失败。
 - 本仓库为**公开**仓库，git 安装无需任何认证。
 
-### 方式 A：作为依赖安装（标准方式，零配置）
+### 方式 A：从 GitHub 安装（推荐，零配置）
+
+**本插件不需要发布到 npm** —— GitHub 即可完整分发，三条路径任选：
 
 ```sh
+# A1) 装最新（跟 main）
 dsh plugin --profile web add github:BaihaWhite/dsh-web-search-scrape
+
+# A2) 锁定版本（tag，推荐生产用）
+dsh plugin --profile web add github:BaihaWhite/dsh-web-search-scrape#v1.3.0
+
+# A3) Release tarball（无需 git，走 HTTPS 下载）
+dsh plugin --profile web add \
+  https://github.com/BaihaWhite/dsh-web-search-scrape/releases/download/v1.3.0/web-search-scrape-1.3.0.tgz
 ```
 
 `dsh plugin` 是 pnpm 的包装命令：写完依赖后会**按已安装状态重整 profile 的层栈** —— 任何声明了
@@ -252,7 +262,14 @@ dsh plugin --profile web add github:BaihaWhite/dsh-web-search-scrape
 （`web.searchProvider` 改指本插件、停用 `tool-web` 的 search、插入本插件行）——
 **不需要手工编辑 profile 的 `cordis.patch.yml`**。装完重启 `dsh web` 即可。
 
-> 已经装过的用户升级到 1.2.0+ 后同样生效：`dsh plugin --profile web update` 会重新对账层栈。
+> 该机制按 node_modules 里**解析到的依赖**判定，与来源无关：git / tarball / link / npm 都成立。
+> 已装过的用户升级后同样生效：`dsh plugin --profile web update` 会重新对账层栈。
+
+> 仓库带有 `dsh-plugin` topic，因此也会被 DSH 插件商店（按 GitHub topic 检索）收录。
+>
+> 若发布了 npm 版本，也可用 `dsh plugin --profile web add web-search-scrape`（短名 + semver），
+> 但那只是便利性差异，**不是分发的前提**。
+
 
 ### 方式 B：本地目录 + 符号链接（开发调试）
 
