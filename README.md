@@ -47,7 +47,7 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 
 - DSH 已安装，且使用 `web` profile（`~/.dsh/profiles/web`）。
 - `pnpm-workspace.yaml` 建议包含 `nodeLinker: hoisted`，否则 pnpm 的严格布局可能让包解析失败。
-- 本仓库为**私有**仓库，通过 git 安装需要已有的 GitHub 凭据（本机走 `gh auth git-credential` 助手）。
+- 本仓库为**公开**仓库，git 安装无需任何认证。
 
 ### 方式 A：作为 git 依赖安装（标准方式）
 
@@ -157,4 +157,6 @@ rm -rf ~/.dsh/profiles/web/web-search-scrape
 
 ## 许可证
 
-私有仓库，未声明开源许可证。
+本仓库当前**未声明开源许可证**——未授予第三方使用、修改或分发本代码的权利。
+
+如需开放复用，请在本仓库添加许可证文件（例如 MIT License，与 `dsh-plugins-list` 保持一致）。
