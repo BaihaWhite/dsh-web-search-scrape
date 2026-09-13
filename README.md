@@ -33,6 +33,19 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 
 ## 变更记录
 
+### 1.3.1
+
+修复 DuckDuckGo 解析的两个缺陷（会导致**结果重复**与**静默丢结果**）：
+
+- **`uddgUrl` 对非跳转的直接链接返回空串** —— `parseDdgHtml` 里 `if (!url) continue`
+  因此把 DDG 给出的直链结果**全部丢弃**。现在无 `uddg=` 参数时回退为直链本身
+  （与既有 `yandexUrl` 的写法一致；`cleanUrl` 仍负责过滤非 http(s) 的 href）。
+- **`parseDdgLite` 未解包 `l/?uddg=` 跳转** —— lite 端点的包装链接与 html 端点的直链
+  在调用方 `seen` 集合里是两个不同的 URL，去重不上，同一篇文章会在一次结果里出现两次。
+  现在 lite 同样走 `uddgUrl`。
+
+实测（同一查询）：结果里 URL 含 `duckduckgo.com/l/` 的条数由 5 降为 **0**。
+
 ### 1.3.0
 
 - **新增 `allowOfficial`（默认 `false`）—— 计费硬保险**：`backend: official` 从此不再等于消费许可。
