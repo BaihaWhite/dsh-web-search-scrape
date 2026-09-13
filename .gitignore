@@ -25,3 +25,6 @@ id_ed25519*
 *.swo
 .DS_Store
 Thumbs.db
+
+# npm pack artifacts
+*.tgz
