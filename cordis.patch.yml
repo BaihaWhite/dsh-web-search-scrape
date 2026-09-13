@@ -42,8 +42,19 @@
     - id: web-search-scrape
       name: 'web-search-scrape'
       config:
-        # local = six-tier scraping pipeline · official = delegated DeepSeek search
+        # local = six-tier scraping pipeline (calls no paid API)
+        # official = delegated DeepSeek search — BILLED per token
         backend: local
+        # Billing guard: `backend: official` alone does nothing while this is
+        # false. The official path then refuses and makes no network call, so a
+        # stray backend value cannot produce an invoice. Flip both to use it.
+        allowOfficial: false
+        # Cap the AUTO tier at 3. Tiers 4-6 spawn an LLM "WebSearch" subagent,
+        # billed on the session's own model, and autoTier escalates on ordinary
+        # words (分析 / 对比 / 趋势 / 报告) — so an uncapped auto tier can buy an
+        # LLM child from a keyword. An explicit `tier` argument is unaffected;
+        # raise this to 6 to restore silent escalation.
+        maxAutoTier: 3
         # also register `web_search_deep`, the tier-capable surface a preset
         # cannot shadow (see README: "为什么有两个工具")
         deepTool: true

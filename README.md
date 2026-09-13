@@ -33,6 +33,15 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 
 ## 变更记录
 
+### 1.3.0
+
+- **新增 `allowOfficial`（默认 `false`）—— 计费硬保险**：`backend: official` 从此不再等于消费许可。
+  未授权时官方路径直接抛错、**零网络请求**，误改配置不会产生账单。要用官方搜索需显式打开。
+- **新增 `maxAutoTier`（随包补丁默认 `3`）**：T4–T6 会派发 LLM 子代理（按会话模型计费），
+  而 `autoTier` 会被「分析/对比/趋势/报告」这类常见词抬到 T5 —— 自动档位封顶可避免静默产生
+  模型费用；模型显式传 `tier` 不受上限影响。
+- README 新增「计费」章节：两处成本点、各自的硬开关、实测证据，以及最省心的配置片段。
+
 ### 1.2.0
 
 - **新增 `web_search_deep` 工具**（`deepTool`，默认开）：DSH `>= 0.1.5` 把模型侧的
@@ -83,6 +92,63 @@ DSH `>= 0.1.5` 把**面向模型的 `web_search` 工具挪到了 agent 预设平
 不想多一个工具就把 `deepTool` 设为 `false`。
 
 > **想要"只留一个工具"？** 见下一节的预设配方。
+
+## 💰 计费：什么时候会花钱，怎么保证不会
+
+抓取本身**永远免费**（只是 HTTP 抓公开结果页）。会产生费用的只有两处，两处都有硬开关：
+
+| # | 成本点 | 计费方式 | 默认 | 硬保险 |
+|---|--------|----------|------|--------|
+| A | `backend: official` | 走 `{baseURL}/messages`（Anthropic 兼容 Messages API），**按 token 计费** | `local`（免费） | **`allowOfficial: false`** |
+| B | 档位 T4–T6 的 WebSearch 子代理 | 派生一个 LLM 子代理，**按会话所用模型计费** | 仅显式 T4+ 触发 | **`maxAutoTier: 3`** |
+
+### A. 官方搜索：双重开关
+
+`allowOfficial` 默认 **false**。此时即使 `backend` 被写成 `official`，插件也会**拒绝执行并直接抛错**，
+**一个请求都不会发出**：
+
+```
+backend is "official" but allowOfficial is false — refusing to call the billed
+DeepSeek search API. To allow billed official searches, enable "allowOfficial"
+in this plugin's settings card. To keep searching for free, set backend back to "local".
+```
+
+也就是说：`backend: official` **本身不是消费许可**。要真的用官方搜索，必须**两个都打开**
+（卡片里选「官方 DeepSeek 搜索（⚠️ 按 token 计费）」+ 打开「⚠️ 允许计费 API」）。
+要回到免费，把 backend 切回 `local` 即可，无需清理 `allowOfficial`。
+
+> 实测：`allowOfficial: false` + `backend: official` → `available()` 返回 false，
+> `search()` 抛 `WEB_PROVIDER_UNAVAILABLE`，官方 API 调用次数 **0**。
+
+### B. T4–T6 子代理：自动档位可能"静默"升档
+
+T4 起会派生一个 LLM 子代理做分诊。它的费用不在搜索 API 上，而在**你当前会话的模型**上。
+麻烦的是 `autoTier` 的关键词表包含 `分析` `对比` `趋势` `报告` 这类**极常见的词**：
+
+```
+查询「对比一下这两款产品并分析趋势」  →  autoTier 选中 T5（派发子代理）
+```
+
+`maxAutoTier` 就是给自动档位设天花板。默认随包补丁给的是 **3**，即：
+
+- 自动档位最高到 T3（全引擎 + 1 个社媒，纯抓取，**零模型费用**）；
+- 模型**显式**传 `tier: 5` 仍然照做（`maxAutoTier` 只约束自动分支）；
+- 想恢复原有行为（不设限）就改成 `6`。
+
+```yaml
+maxAutoTier: 3   # 1-6；3 = 自动最高到"标准"，T4-T6 只能显式调用
+```
+
+想彻底关掉子代理（连显式 T5/T6 也不派发），把 `subagentVerify` 设为 `false`。
+
+### 最省心的配置
+
+```yaml
+backend: local          # 不碰付费搜索 API
+allowOfficial: false    # 就算 backend 写错也不会请求
+maxAutoTier: 3          # 自动档位不会静默买 LLM 子代理
+subagentVerify: false   # 连显式 T5/T6 也不派发子代理（可选，最严格）
+```
 
 ## 配方：用自定义预设做「正统替换」
 
@@ -260,6 +326,8 @@ dsh --profile web --dump-config | grep -i "cannot find"
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
+| `allowOfficial` | boolean | `false` | **计费硬保险**。为 false 时 `backend: official` 会被拒绝且不发请求；见上文「计费」 |
+| `maxAutoTier` | number | `6`（随包补丁给 3） | 自动档位上限，只约束自动分支；显式 `tier` 不受影响 |
 | `deepTool` | boolean | `true` | 是否额外注册 `web_search_deep`（名字不同、不被预设遮蔽、带 `tier`、结果上限取本插件的 `searchMaxResults`） |
 | `backend` | `local` \| `official` | `local` | 搜索后端。`local` = 本插件六档抓取；`official` = 委托内置 DeepSeek 搜索。**改动即时生效**（每次搜索重新取快照） |
 | `engines` | string[] | `[duckduckgo, bing, baidu, google, yandex]` | P0 搜索引擎池 |
