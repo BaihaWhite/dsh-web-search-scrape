@@ -1,0 +1,56 @@
+# web-search-scrape bundle patch.
+#
+# Shipped as this package's `dsh.bundle.patch` (see package.json), so installing
+# the plugin as a profile dependency makes the loader apply this layer for you —
+# no hand-editing of the profile's own cordis.patch.yml. The layer is applied
+# over dsh-base, in bundle order.
+#
+# Manual installs (clone + symlink) do NOT apply this automatically; copy the
+# entries below into ~/.dsh/profiles/<name>/cordis.patch.yml instead.
+
+# 1) Point the web seam's search at this plugin's router provider. The router
+#    then chooses per the settings card's `backend` (local scraping vs the
+#    built-in official search).
+#    NB: patch semantics REPLACE a row's whole `config`, so re-state every field
+#    the row needs — `fetchProvider` would otherwise be dropped.
+- id: web
+  config:
+    searchProvider: web-scrape
+    fetchProvider: http
+
+# 2) The built-in tool-web row provides `web_search`/`web_fetch` on the profile
+#    plane wherever it is enabled. Disable only its SEARCH so this plugin's
+#    `web_search` can register without a same-scope name collision; leave fetch
+#    enabled (the model keeps `web_fetch`).
+#    Patch semantics replace the whole config, so re-state `fetch` and the
+#    timeouts even though only `search` changes.
+- id: tool-web
+  config:
+    fetch: true
+    search: false
+    searchTimeoutMs: 60000
+    searchMaxResults: 8
+    searchMaxQueries: 4
+
+# 3) web-search-deepseek stays ENABLED on purpose: it is the delegation target
+#    for `backend: official` and it owns the official "Web search" settings card
+#    (endpoint / model / key). Its own `deepseek-official` provider is never
+#    selected, because entry 1 pins `searchProvider` to `web-scrape`.
+
+# 4) Mount this plugin's row.
+- insert:
+    - id: web-search-scrape
+      name: 'web-search-scrape'
+      config:
+        # local = six-tier scraping pipeline · official = delegated DeepSeek search
+        backend: local
+        # also register `web_search_deep`, the tier-capable surface a preset
+        # cannot shadow (see README: "为什么有两个工具")
+        deepTool: true
+        engines: [duckduckgo, bing, baidu, google, yandex]
+        socials: [weixin, bilibili, weibo, x, zhihu, douyin, reddit]
+        verify: true
+        subagentVerify: true
+        defaultTier: 0
+        toolBudgetMs: 300000
+        searchMaxResults: 130

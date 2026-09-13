@@ -23,6 +23,7 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 .
 ├── package.json      # 包元信息（name/exports/dsh.engines/dsh.client 声明）
 ├── LICENSE           # MIT
+├── cordis.patch.yml  # 随包补丁（dsh.bundle.patch），安装时自动应用
 └── lib
     ├── index.js      # 宿主半：provider(router) + web_search 工具 + 设置命名空间
     └── client.js     # 浏览器半：设置页卡片（含 backend 选择）
@@ -31,6 +32,15 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 > 本仓库直接存放可运行的 ESM 源码，无构建步骤：`lib/*.js` 即发布产物。
 
 ## 变更记录
+
+### 1.2.0
+
+- **新增 `web_search_deep` 工具**（`deepTool`，默认开）：DSH `>= 0.1.5` 把模型侧的
+  `web_search` 移到了 agent 预设平面，预设的同名工具会遮蔽本插件的注册，导致 `tier`
+  传不进来、且结果被预设的 `searchMaxResults: 8` 截断。名字不同的工具不会被遮蔽，
+  深度控制因此在任何预设下都可用。详见上文「为什么有两个工具」。
+- **新增 `dsh.bundle.patch`**：仓库自带 `cordis.patch.yml`，安装时由 loader 自动并入
+  profile 层栈 —— **不再需要手工编辑 profile 的补丁文件**。方式 B（符号链接）仍需手工应用。
 
 ### 1.1.0
 
@@ -46,6 +56,35 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 ### 1.0.0
 
 - 首个版本：六档分级抓取式检索。
+
+## 为什么有两个工具：`web_search` 与 `web_search_deep`
+
+DSH `>= 0.1.5` 把**面向模型的 `web_search` 工具挪到了 agent 预设平面**（每个预设里的
+`tool-web` 行，作用域是 agent 级）。按 `dsh-scope` 的层级语义，**agent 级的同名工具会遮蔽
+本插件在 profile 层注册的同名工具**。实测证据：实时工具列表里 `web_search` 的参数是
+`queries`（数组），不是本插件的 `query` + `tier`。
+
+这带来两个后果：
+
+1. **`tier` 参数传不进来** —— 模型无法显式指定深度，只能靠查询特征自动选档，或用设置卡片里的 `defaultTier` 固定档位；
+2. **结果被截到 8 条** —— `tool-web` 的 `searchMaxResults` 默认是 `8`，而 seam 会按请求的 `maxResults` 截断返回值。也就是说即便 T5/T6 抓了 50+80 条，模型最终也只看得到 8 条。
+
+**解决方式**：本插件同时注册一个**名字不同**的工具 `web_search_deep`。名字不同就不会被遮蔽
+（没有别的注册者占用该名字），并且它按本插件的配置发请求（`searchMaxResults: 130`），
+所以深度控制和结果预算在任何预设下都可用，**不需要用户切换或改造预设**。
+
+| 工具 | 注册者 | 何时生效 | 参数 | 结果上限 |
+|------|--------|----------|------|----------|
+| `web_search` | 预设的 `tool-web`（0.1.5+） | 总是（遮蔽本插件的同名注册） | `queries: string[]` | 8（预设配置） |
+| `web_search` | 本插件 | 仅当预设**不带** web 工具时 | `query`, `tier` | 130（本插件配置） |
+| `web_search_deep` | 本插件 | **总是**（名字不冲突） | `query`, `tier` | 130（本插件配置） |
+
+三个都走同一个 provider，所以无论模型点哪一个，六档管线、消息甄别、多源验证都在生效。
+不想多一个工具就把 `deepTool` 设为 `false`。
+
+> **想要"一个工具"的替代方案**：自定义一个 agent 预设，把其中 `tool-web` 行的 `search` 置为
+> `false`（保留 `fetch: true`），模型侧就只剩本插件的 `web_search`（带 `tier`）。这是
+> 平面上更"正统"的做法，代价是需要切换预设。复制官方 `standard` 预设改一行即可。
 
 ## 六档深度
 
@@ -78,18 +117,32 @@ DSH（DeepSeek Harness）的**六档分级抓取式网页检索插件**。
 - `pnpm-workspace.yaml` 建议包含 `nodeLinker: hoisted`：本插件不声明依赖（宿主包由 DSH 提供），严格布局下包解析可能失败。
 - 本仓库为**公开**仓库，git 安装无需任何认证。
 
-### 方式 A：作为 git 依赖安装（标准方式）
+### 方式 A：作为依赖安装（标准方式，零配置）
 
 ```sh
 dsh plugin --profile web add github:BaihaWhite/dsh-web-search-scrape
 ```
 
-`dsh plugin` 是 pnpm 的包装命令，等价于在该 profile 下执行 `pnpm add`，会把本包写入 `package.json` 依赖并安装到 `node_modules`。
+`dsh plugin` 是 pnpm 的包装命令：写完依赖后会**按已安装状态重整 profile 的层栈** —— 任何声明了
+`dsh.bundle` 的依赖会自动加入 `dsh.profile.bundles`，而本仓库正是这样声明的：
 
-### 方式 B：本地目录 + 符号链接
+```json
+"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+```
+
+于是仓库自带的 [`cordis.patch.yml`](./cordis.patch.yml) 会作为一层补丁自动应用
+（`web.searchProvider` 改指本插件、停用 `tool-web` 的 search、插入本插件行）——
+**不需要手工编辑 profile 的 `cordis.patch.yml`**。装完重启 `dsh web` 即可。
+
+> 已经装过的用户升级到 1.2.0+ 后同样生效：`dsh plugin --profile web update` 会重新对账层栈。
+
+### 方式 B：本地目录 + 符号链接（开发调试）
 
 > 注意：克隆目录**必须放在 profile 目录内**（如下），否则 Node 按真实路径解析裸导入时
 > 找不到宿主包。放到 `/tmp` 之类的目录会报 `Cannot find package '@deepseek-ai/dsh-...'`。
+>
+> 方式 B **不会**自动应用仓库自带的补丁，需要手工把 `cordis.patch.yml` 的内容复制进
+> profile 的补丁层（见下一节）。
 
 ```sh
 cd ~/.dsh/profiles/web
@@ -97,11 +150,12 @@ git clone https://github.com/BaihaWhite/dsh-web-search-scrape.git web-search-scr
 ln -s ../web-search-scrape node_modules/web-search-scrape
 ```
 
-符号链接让 `cordis.patch.yml` 里的 `name: 'web-search-scrape'` 能被解析到包目录。
+符号链接让补丁里的 `name: 'web-search-scrape'` 能被解析到包目录。
 
-### 必需的补丁配置
+### 手动安装时的补丁配置
 
-在 `~/.dsh/profiles/web/cordis.patch.yml` 中加入/确认以下条目：
+方式 A 会自动应用，**此节仅方式 B（或想自定义）时需要**。把以下条目加进
+`~/.dsh/profiles/web/cordis.patch.yml`（内容与仓库自带补丁一致）：
 
 ```yaml
 # 1) web 行：searchProvider 改指本插件的 provider id
@@ -154,6 +208,7 @@ dsh --profile web --dump-config | grep -i "cannot find"
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
+| `deepTool` | boolean | `true` | 是否额外注册 `web_search_deep`（名字不同、不被预设遮蔽、带 `tier`、结果上限取本插件的 `searchMaxResults`） |
 | `backend` | `local` \| `official` | `local` | 搜索后端。`local` = 本插件六档抓取；`official` = 委托内置 DeepSeek 搜索。**改动即时生效**（每次搜索重新取快照） |
 | `engines` | string[] | `[duckduckgo, bing, baidu, google, yandex]` | P0 搜索引擎池 |
 | `socials` | string[] | `[weixin, bilibili, weibo, x, zhihu, douyin, reddit]` | P1 社交平台池 |

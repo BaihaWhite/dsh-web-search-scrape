@@ -1,10 +1,10 @@
 {
   "name": "web-search-scrape",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "license": "MIT",
-  "description": "Six-tier web search provider for the ctx.web seam with a selectable backend: local scraping (P0 search engines + P1 social platforms, tiers 1-6, optional WebSearch subagent triage with S/A/B/C/D/F grading and claim verdicts) or the built-in official DeepSeek search, switchable live from the settings card.",
+  "description": "Six-tier web search provider for the ctx.web seam with a selectable backend (local scraping or the built-in official DeepSeek search), a tier-capable web_search_deep tool that a preset cannot shadow, and a settings card.",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
@@ -13,6 +13,9 @@
   "dsh": {
     "engines": {
       "dsh": ">=0.1.5-rc.2"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
     },
     "client": {
       "inject": [
