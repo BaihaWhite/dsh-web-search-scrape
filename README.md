@@ -82,9 +82,61 @@ DSH `>= 0.1.5` 把**面向模型的 `web_search` 工具挪到了 agent 预设平
 三个都走同一个 provider，所以无论模型点哪一个，六档管线、消息甄别、多源验证都在生效。
 不想多一个工具就把 `deepTool` 设为 `false`。
 
-> **想要"一个工具"的替代方案**：自定义一个 agent 预设，把其中 `tool-web` 行的 `search` 置为
-> `false`（保留 `fetch: true`），模型侧就只剩本插件的 `web_search`（带 `tier`）。这是
-> 平面上更"正统"的做法，代价是需要切换预设。复制官方 `standard` 预设改一行即可。
+> **想要"只留一个工具"？** 见下一节的预设配方。
+
+## 配方：用自定义预设做「正统替换」
+
+如果你更想要**一个** `web_search`（而不是 `web_search` + `web_search_deep` 两个），可以做一个
+自定义 agent 预设，把模型侧的搜索工具交还给本插件。这是平面上更"正统"的做法：模型侧工具
+本来就归预设管，改预设即可，不需要和遮蔽机制对抗。
+
+**代价**：只在选了该预设的会话里生效，新建会话时需要切一下预设。
+
+### 步骤
+
+**1)** 从官方 `standard` 复制一份到用户预设根 `${DSH_HOME:-~/.dsh}/.agent-presets/<id>/`：
+
+```sh
+mkdir -p ~/.dsh/.agent-presets/dsh-scrape
+P=<dsh 安装目录>/node_modules/@deepseek-ai/dsh-agent-presets/presets/standard
+cp "$P/agent.cordis.yml" "$P/preset.yml" ~/.dsh/.agent-presets/dsh-scrape/
+```
+
+也可以在 GUI「设置 → Agent 预设」里用"复制"完成这一步。
+
+**2)** 把复制出来的 `agent.cordis.yml` 里的 `tool-web` 行改成：
+
+```yaml
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: true        # web_fetch 仍由这里提供
+    search: false      # 交出 web_search —— 让本插件的（带 tier）成为唯一一个
+    searchTimeoutMs: 60000
+```
+
+**3)** 改 `preset.yml` 的 `name` / `description`（可选，否则选择器里只有目录名）。
+
+**4)** 新建会话时选这个预设。模型侧就只剩本插件的 `web_search`，**带 `tier` 参数**，
+结果上限取本插件的 `searchMaxResults`（默认 130，不再是预设的 8）。
+
+### 验证
+
+不必先开会话，可以让宿主单独组合一遍这个预设（真实 mount，但不启动任何会话）：在 `cordis`
+预设的会话里用动态 Cordis 插件注入 `agentPresets`，调用 `standingKeyFor('<预设 id>')` ——
+正常返回即组合可用；抛错会给出四种失败原因之一（包无法解析 / config 非法 / 有行未激活 /
+行把服务发布到了进程全局域）。
+
+> 注意 `standingKeyFor` 是一次**真实 mount**：成功后会在该进程内驻留一个 standing
+> generation 直到进程退出；失败则清理干净、不留痕迹。
+
+### 撤销
+
+```sh
+rm -rf ~/.dsh/.agent-presets/<id>
+```
+
+再把新会话切回 `standard` 即可 —— **已经在跑的会话仍用它启动时的预设**，不受影响。
 
 ## 六档深度
 
