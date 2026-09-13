@@ -1,0 +1,21 @@
+{
+  "name": "web-search-scrape",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Six-tier web search provider for the ctx.web seam: P0 search engines + P1 social platforms, optional WebSearch subagent triage (S/A/B/C/D/F grading, claim verdicts, upstream checks), and a settings card for the Plugins page.",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  }
+}
